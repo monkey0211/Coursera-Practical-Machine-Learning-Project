@@ -1,0 +1,111 @@
+---
+title: "Practical Machine Learning Project"
+author: "Ivy Hou"
+date: "8/5/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+## Getting and cleaning data
+
+First, I install the related packages and load the dataset. 
+
+```{r}
+
+library(e1071)
+library(caret)
+library(ggplot2)
+library(rpart)
+library(randomForest)
+
+
+pml_training <- read.csv("~/Downloads/pml-training.csv")
+pml_testing <- read.csv("~/Downloads/pml-testing.csv")
+
+```
+
+After loading the data, I have 3 steps to clean the variables. 
+1. Remove all the nearZeroVariables. 
+```{r}
+
+# remove the near zero variables
+nzv<-nearZeroVar(pml_training)
+training<-pml_training[,-nzv]
+
+```
+
+We can see that there are some variables with a lot of NAs. so we will remove those.
+2.Remove all the variables that have a 90% NAs.
+```{r}
+varNA<-sapply(training,function(x) mean(is.na(x))>0.9)
+training1<-training[,varNA==F]
+
+```
+
+From the perspective, we only need variables that can interpret the model and related to the prediction.
+3 Remove the variables that make sense.
+```{r}
+# remove the variables that do not make sense(x,user_name, raw_timestamp_part_1,raw_timestamp_part_2, cvtd_timestamp)
+training2<-training1[,-(1:5)]
+
+```
+
+Next, we would need to seperate the training set into training and cross validation by p=0.7.and also we keep the same variables in testing dataset. 
+```{r}
+# seperate the training data into training and cross validation with p=0.7
+
+inTrain<-createDataPartition(y=pml_training$classe,p=0.7,list=F)
+ptrain<-training2[inTrain,]
+cv<-training2[-inTrain,]
+
+#transform the testing data the same as training data
+cname<-colnames(ptrain[,-54])
+testing<-pml_testing[cname]
+
+```
+
+
+## Model Building - Decision Tree
+```{r}
+
+set.seed(12345)
+decisiontree<-rpart(classe ~., data=ptrain, method="class")
+plot(decisiontree,uniform=TRUE)
+
+# make predictions with cv dataset
+pred_decisiontree<-predict(decisiontree, newdata=cv, type="class")
+cmtree<-confusionMatrix(pred_decisiontree,cv$classe)
+cmtree
+```
+From the confusion matrix, we can see that accuracy is over 0.8 which is a good fit.
+
+## Model Building - Random Forest
+```{r}
+
+set.seed(12345)
+ptrain$classe<-as.factor(ptrain$classe)
+rf<-randomForest(classe ~., data=ptrain,na.action = na.omit)
+# make predictions with cv dataset
+pred_rf<-predict(rf, newdata=cv, type="class")
+cmrf<-confusionMatrix(pred_rf,cv$classe)
+cmrf
+```
+
+## Model Selection and Prediction
+From the above results we can see that randomForest has a higher accuracy 0.9968 and performs better. so we would use randomForest to make predicitons for the testing model.
+
+```{r}
+pred_rf_testing<-predict(rf,newdata=testing, type="class")
+pred_rf_testing
+```
+
+
+
